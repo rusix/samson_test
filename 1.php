@@ -210,7 +210,7 @@ function squareTrapeze(array $a):array
 
 
 /**
- * RETURN MIN VALUE FROM ARRAY
+ * PRINT TABLE FOR 2xArray WITH CALC ITEM
  * 
  * @param array $a (2xArray with new calc key (s))
  *        Simple [[‘a’=>1,’b’=>2,’с’=>3,’s’=>4.5],[‘a’=>4,’b’=>5 ,’c’=>6,’s’=>27]]
