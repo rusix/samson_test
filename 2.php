@@ -214,6 +214,120 @@ function importXml($a)
 
 
 
+/**
+ * EXPORT FROM DB TO XML
+ * 
+ * @param string $a Path to import XML file (print to screen if empty)  
+ * @param int $b ID for parent section (select all if empty) 
+ * 
+ * @var int $bEncodeTo1251 Encode to CP1251 
+ */
+function exportXml($a = '', $b = null)
+{
+    $bEncodeTo1251 = true;
+    
+    global $hDB;
+    $sFilePath = $a;
+    $iSectionID = $b;
+    
+    $oXMLProducts = new SimpleXMLElement("<products></products>");
+    $aSectionsIDs = array();
+    $sSectionsSQLWhere = '';
+    
+    // Prepare sections
+    $fnGetChilds = function($iSecionID) use (&$hDB, &$aSectionsIDs, &$fnGetChilds)
+    {
+        $aSectionsIDs[] = $iSecionID;
+        
+        $stmt = $hDB->prepare('SELECT ID FROM A_CATEGORY WHERE PID = :section_id;');
+        $stmt->bindValue(':section_id', $iSecionID);
+        $stmt->execute();
+        $aResult = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($aResult)) {
+            foreach ($aResult as $iChildID) {
+                $fnGetChilds($iChildID['ID']);
+            }
+        }
+        return  $aSectionsIDs;
+    };    
+    if (! is_null($iSectionID)){
+        $sSectionsIDs = implode(',', $fnGetChilds($iSectionID)); 
+        $sSectionsSQLWhere = 'WHERE C.ID IN ('.$sSectionsIDs.')';
+    }
+    $stmt = $hDB->prepare('SELECT DISTINCT P.ID, P.SKU, P.NAME FROM ((A_PRODUCT P JOIN A_PRODUCT_CATEGORY PC ON P.ID = PC.PRODUCT_ID) JOIN A_CATEGORY C ON PC.CATEGORY_ID = C.ID ) '.$sSectionsSQLWhere);
+    $stmt->execute();
+    // EACH PRODUCTS
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $aProduct) {
+        
+        $iProductID = $aProduct['ID']; 
+        
+        $oXMLProduct = $oXMLProducts->addChild('product');
+        $oXMLProduct->addAttribute('SKU', $aProduct['SKU']);  
+        $oXMLProduct->addAttribute('name', $aProduct['NAME']);
+        
+        // Product -> Prices
+        $stmt = $hDB->prepare('SELECT P.VALUE, PT.NAME FROM (A_PRICE P JOIN A_PRICE_TYPES PT ON P.PRICE_TYPE_ID = PT.ID) WHERE P.PRODUCT_ID = :product_id;');
+        $stmt->bindValue(':product_id', $iProductID);
+        $stmt->execute();
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $aPrice) {
+            $oXMLProductPrice = $oXMLProduct->addChild('price', $aPrice['VALUE']);
+            $oXMLProductPrice->addAttribute('type', $aPrice['NAME']); 
+        }
+        // Product -> Properties
+        $stmt = $hDB->prepare('SELECT P.VALUE, PT.NAME, TPUT.NAME AS UNIT FROM ((A_PROPERTY P JOIN A_PROPERTY_TYPES PT ON P.PROPERTY_TYPE_ID = PT.ID) LEFT JOIN A_PROPERTY_UNITS_TYPES TPUT ON PT.PROPERTY_UNIT_ID = TPUT.ID) WHERE P.PRODUCT_ID = :product_id;');
+        $stmt->bindValue(':product_id', $iProductID);
+        $stmt->execute();
+        $oXMLProductProps = null;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $aProp) {
+            if (is_null($oXMLProductProps)) {
+                $oXMLProductProps = $oXMLProduct->addChild('propertyes');
+            }
+            $oXMLProductProp = $oXMLProductProps->addChild('property', $aProp['VALUE']);
+            $oXMLProductProp->addAttribute('name', $aProp['NAME']); 
+            if ($aProp['UNIT'] != '') {
+                $oXMLProductProp->addAttribute('units', $aProp['UNIT']); 
+            }
+            
+        }
+        // Product -> Sections
+        $stmt = $hDB->prepare('SELECT C.NAME FROM (A_CATEGORY C JOIN A_PRODUCT_CATEGORY PC ON C.ID = PC.CATEGORY_ID) WHERE PC.PRODUCT_ID = :product_id;');
+        $stmt->bindValue(':product_id', $iProductID);
+        $stmt->execute();
+        $oXMLSections = null;
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $aSection) {
+            if (is_null($oXMLSections)) {
+                $oXMLSections = $oXMLProduct->addChild('sections');
+            }
+            $oXMLSection = $oXMLSections->addChild('section', $aSection['NAME']);
+        }
+        
+    }
+    // FORMATTING  
+    $oDOM = dom_import_simplexml($oXMLProducts)->ownerDocument;
+    $oDOM->formatOutput = true;
+    $sContent = html_entity_decode($oDOM->saveXML(), ENT_NOQUOTES, 'UTF-8');
+    // ENCODE
+    if ($bEncodeTo1251) {
+        $sContent = preg_replace('/<\?xml .*?>/', '<?xml version="1.0" encoding="windows-1251"?>', $sContent);
+        $sContent = fnTagTranslate($sContent, false);
+    }
+    if ($sFilePath == ''){
+        // PRINT XML
+        header('Content-type: text/xml');
+        echo $sContent;
+    } else {
+        // SAVE XML
+        if ($bEncodeTo1251) {
+            $sContent = iconv("UTF-8", "CP1251", $sContent);
+        }
+        file_put_contents($sFilePath, $sContent);
+    }
+    
+}
+
+
+
+
 
 
 /**
