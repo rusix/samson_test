@@ -36,3 +36,33 @@ function convertString(string $a, string $b):string
     );
     return $sContent;
 }
+
+
+
+
+
+
+
+/**
+ * SORT 2xArray BY SUBKEY
+ * 
+ * @param array $a 2xArray (Simple: [['a'=>2,'b'=>1],['a'=>1,'b'=>3]])
+ * @param string $b Key for SubArray of param $a 
+ *  
+ * @return array
+ */
+function mySortForKey(array $a, string $b):array
+{
+    $arrA = $a;
+    $sSortKey = $b;
+    $arrTmpByKey = array();
+    foreach ($arrA as $key => $val){
+        if (! isset($val[$sSortKey])) {
+            throw new Exception("mySortForKey(): Key({$sSortKey}) not found in element with index:[$key] "); 
+        }
+        $arrTmpByKey[] = $val[$sSortKey];
+    }
+    array_multisort($arrTmpByKey, $arrA); 
+    return $arrA; 
+}
+
