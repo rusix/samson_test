@@ -348,7 +348,7 @@ function convertString(string $a, string $b):string
     $sSubStr = preg_quote($b);
 	$sContent = preg_replace_callback(
         "/({$sSubStr})/siU",
-        function ($matches){
+        function ($matches) use ($iMatchNo){
             static $trigger = 0;
             $sSubStr = $matches[1];
             // select end revers choose match (preg_split for UNICODE)
