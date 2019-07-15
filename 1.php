@@ -98,24 +98,29 @@ function getMin(array $a):float
  */
 function findSimple(int $a, int $b):array
 {
-    $aRange = array();
-    $aSimpleKeys = array(2, 3, 5, 7);
+    $iStartVal = 2;
+    $aSimpleKeys = array($iStartVal);
     
     if (! ($a > 0 && $b > 0 ) ){
         throw new Exception('findSimple(): Bad value params');
     }
-    $aRange = range($a, $b, 1);
+
+    $aRange = range(1, max(array($a, $b)), 1);
     foreach($aRange as $iKey => $iVal) {
+        $iSimpleFlag = true;
         foreach($aSimpleKeys as $iSimpleVal) {
             if ($iVal == 1 || ( $iVal != $iSimpleVal && fmod($iVal, $iSimpleVal) == 0)) {
                 unset ($aRange[$iKey]);
+                $iSimpleFlag = false;
             }
         }
+        if ($iSimpleFlag && ($iVal != $iStartVal)) {
+           $aSimpleKeys[] = $iVal;
+        }
     }
-    
-    return $aRange;    
-}
 
+    return array_intersect($aSimpleKeys, range($a, $b));   
+}
 
 
 
