@@ -230,10 +230,13 @@ function exportXml($a = '', $b = null)
     $sFilePath = $a;
     $iSectionID = $b;
     
-    $oXMLProducts = new SimpleXMLElement("<products></products>");
+    $oXMLDOM = new DOMDocument('1.0', 'utf-8');
     $aSectionsIDs = array();
     $sSectionsSQLWhere = '';
     
+    //Create root
+    $oXMLProducts = $oXMLDOM->createElement('products');
+    $oXMLDOM->appendChild($oXMLProducts);
     // Prepare sections
     $fnGetChilds = function($iSecionID) use (&$hDB, &$aSectionsIDs, &$fnGetChilds)
     {
@@ -261,17 +264,28 @@ function exportXml($a = '', $b = null)
         
         $iProductID = $aProduct['ID']; 
         
-        $oXMLProduct = $oXMLProducts->addChild('product');
-        $oXMLProduct->addAttribute('SKU', $aProduct['SKU']);  
-        $oXMLProduct->addAttribute('name', $aProduct['NAME']);
+        $oXMLProduct = $oXMLDOM->createElement("product");
+        $oXMLProduct = $oXMLProducts->appendChild($oXMLProduct);
+
+        $oXMLProductAttrSKU = $oXMLDOM->createAttribute('SKU');
+        $oXMLProductAttrSKU->value = $aProduct['SKU'];
+        $oXMLProduct->appendChild($oXMLProductAttrSKU);
+
+        $oXMLProductAttrSKU = $oXMLDOM->createAttribute('name');
+        $oXMLProductAttrSKU->value = $aProduct['NAME'];
+        $oXMLProduct->appendChild($oXMLProductAttrSKU);
         
         // Product -> Prices
         $stmt = $hDB->prepare('SELECT P.VALUE, PT.NAME FROM (A_PRICE P JOIN A_PRICE_TYPES PT ON P.PRICE_TYPE_ID = PT.ID) WHERE P.PRODUCT_ID = :product_id;');
         $stmt->bindValue(':product_id', $iProductID);
         $stmt->execute();
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $aPrice) {
-            $oXMLProductPrice = $oXMLProduct->addChild('price', $aPrice['VALUE']);
-            $oXMLProductPrice->addAttribute('type', $aPrice['NAME']); 
+            $oXMLProductPrice = $oXMLDOM->createElement("price", $aPrice['VALUE']);
+            $oXMLProduct->appendChild($oXMLProductPrice);
+
+            $oXMLPricePriceAttrType = $oXMLDOM->createAttribute('type');
+            $oXMLPricePriceAttrType->value = $aPrice['NAME'];
+            $oXMLProductPrice ->appendChild($oXMLPricePriceAttrType);
         }
         // Product -> Properties
         $stmt = $hDB->prepare('SELECT P.VALUE, PT.NAME, TPUT.NAME AS UNIT FROM ((A_PROPERTY P JOIN A_PROPERTY_TYPES PT ON P.PROPERTY_TYPE_ID = PT.ID) LEFT JOIN A_PROPERTY_UNITS_TYPES TPUT ON PT.PROPERTY_UNIT_ID = TPUT.ID) WHERE P.PRODUCT_ID = :product_id;');
@@ -280,12 +294,21 @@ function exportXml($a = '', $b = null)
         $oXMLProductProps = null;
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $aProp) {
             if (is_null($oXMLProductProps)) {
-                $oXMLProductProps = $oXMLProduct->addChild('propertyes');
+                //~ $oXMLProductProps = $oXMLProduct->addChild('propertyes');
+                $oXMLProductProps = $oXMLDOM->createElement("propertyes");
+                $oXMLProduct->appendChild($oXMLProductProps);
             }
-            $oXMLProductProp = $oXMLProductProps->addChild('property', $aProp['VALUE']);
-            $oXMLProductProp->addAttribute('name', $aProp['NAME']); 
+            $oXMLProductProp = $oXMLDOM->createElement("property", $aProp['VALUE']);
+            $oXMLProductProps->appendChild($oXMLProductProp);
+            
+            $oXMLPropAttrName = $oXMLDOM->createAttribute('name');
+            $oXMLPropAttrName->value = $aProp['NAME'];
+            $oXMLProductProp ->appendChild($oXMLPropAttrName);
+            
             if ($aProp['UNIT'] != '') {
-                $oXMLProductProp->addAttribute('units', $aProp['UNIT']); 
+                $oXMLPropAttrUnit = $oXMLDOM->createAttribute('units');
+                $oXMLPropAttrUnit->value = $aProp['UNIT'];
+                $oXMLProductProp ->appendChild($oXMLPropAttrUnit);
             }
             
         }
@@ -296,16 +319,18 @@ function exportXml($a = '', $b = null)
         $oXMLSections = null;
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $aSection) {
             if (is_null($oXMLSections)) {
-                $oXMLSections = $oXMLProduct->addChild('sections');
+                $oXMLSections = $oXMLDOM->createElement("sections");
+                $oXMLProduct->appendChild($oXMLSections);
             }
-            $oXMLSection = $oXMLSections->addChild('section', $aSection['NAME']);
+            
+            $oXMLSection = $oXMLDOM->createElement("section", $aSection['NAME']);
+            $oXMLSections->appendChild($oXMLSection);
         }
         
     }
     // FORMATTING  
-    $oDOM = dom_import_simplexml($oXMLProducts)->ownerDocument;
-    $oDOM->formatOutput = true;
-    $sContent = html_entity_decode($oDOM->saveXML(), ENT_NOQUOTES, 'UTF-8');
+    $oXMLDOM->formatOutput = true;
+    $sContent = $oXMLDOM->saveXML();
     // ENCODE
     if ($bEncodeTo1251) {
         $sContent = preg_replace('/<\?xml .*?>/', '<?xml version="1.0" encoding="windows-1251"?>', $sContent);
